@@ -39,7 +39,7 @@ The CM6206 exposes a 6-channel ALSA device in `analog-surround-51` mode. PipeWir
 
 Config: [configs/unified-upmix-sink.conf](configs/unified-upmix-sink.conf)
 
-This single sink replaces the earlier `local-upmix` and `vban-upmix` loopback sinks. All audio (local playback, Bluetooth, future Scream network receiver) routes through here.
+This single sink replaces the earlier `local-upmix` and `vban-upmix` loopback sinks. All audio (local playback, Bluetooth) routes through here.
 
 Key settings:
 - `capture.props`: 6 channels `[FL FR FC LFE RL RR]`. `channelmix.upmix = true` and `channelmix.upmix-method = psd` are set on the **sink** so any connected stereo stream gets upmixed automatically.
@@ -152,7 +152,7 @@ All paths in the repo use absolute links (`ln -snf`) so you can change files in 
 - [x] Bluetooth routing rule installed
 - [x] Stereo upmix to 4.1 (quad + sub) via PSD confirmed working
 - [x] ALSA `surround41_cm6206` device functional (optional direct testing)
-- [ ] Network receiver (Scream, to replace VBAN)
+- [ ] Network audio receiver (to replace VBAN)
 - [ ] EasyEffects software crossover (optional, future)
 - [ ] Per-channel volume tuning
 
@@ -160,7 +160,7 @@ All paths in the repo use absolute links (`ln -snf`) so you can change files in 
 
 The following files were deleted from the repo and active config directories as part of cleanup:
 
-- `vban-recv.conf` — VBAN receiver (superseded by Scream).
+- `vban-recv.conf` — VBAN receiver.
 - `vban-upmix-sink.conf` — Second loopback sink for VBAN.
 - `51-vban-routing.conf` — WirePlumber VBAN routing rule.
 - `50-cm6206-channel-map.conf` — Empty rule that did nothing useful.
