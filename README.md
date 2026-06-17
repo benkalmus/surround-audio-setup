@@ -129,10 +129,24 @@ paplay /tmp/test_rear_stereo.wav
 - **PSD upmix requires L/R difference**: Identical content on both channels produces no rear output. This is correct behavior (PSD extracts ambient/difference signal) but can be confusing during testing. Use `simple` method instead if you want front copied to rear regardless.
 - **Filter-chain module did not work**: PipeWire's `libpipewire-module-filter-chain` with builtin DSP nodes (convolver, delay, bq_lowpass) produced no output despite correct port links. Root cause unknown. The loopback module approach also failed for LFE. The working solution is system-wide channelmix via pipewire-pulse stream properties.
 
-## Files
+## Install Locations
 
-| File | Purpose | Install Location |
+Configs can be installed per-user or system-wide. System-wide makes the 4.1 setup available to all users on the machine.
+
+| File | Per-User Location | System-Wide Location |
 |---|---|---|
-| `configs/asoundrc` | ALSA surround41 device for CM6206 (8ch hw, 5ch mapped) | `~/.asoundrc` |
-| `configs/50-cm6206-channel-map.conf` | WirePlumber ALSA monitor rule (channel positions + channelmix) | `~/.config/wireplumber/wireplumber.conf.d/` |
-| `configs/upmix.conf` | PipeWire-Pulse stream properties for system-wide upmix | `~/.config/pipewire/pipewire-pulse.conf.d/` |
+| `configs/asoundrc` | `~/.asoundrc` | `/etc/asound.conf` |
+| `configs/50-cm6206-channel-map.conf` | `~/.config/wireplumber/wireplumber.conf.d/` | `/etc/wireplumber/wireplumber.conf.d/` |
+| `configs/upmix.conf` | `~/.config/pipewire/pipewire-pulse.conf.d/` | `/etc/pipewire/pipewire-pulse.conf.d/` |
+
+### System-wide install (requires sudo)
+
+```bash
+sudo cp configs/asoundrc /etc/asound.conf
+sudo mkdir -p /etc/wireplumber/wireplumber.conf.d
+sudo cp configs/50-cm6206-channel-map.conf /etc/wireplumber/wireplumber.conf.d/
+sudo mkdir -p /etc/pipewire/pipewire-pulse.conf.d
+sudo cp configs/upmix.conf /etc/pipewire/pipewire-pulse.conf.d/
+```
+
+After system-wide install, the per-user copies in `~/.config/` and `~/.asoundrc` can be removed since the system-level configs take precedence when no user override exists.
