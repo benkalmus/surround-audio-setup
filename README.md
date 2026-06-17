@@ -33,9 +33,19 @@ The CM6206 requires the `pro-audio` profile for 8-channel output. ACP profiles (
 pactl set-card-profile alsa_card.usb-0d8c_USB_Sound_Device-00 pro-audio
 ```
 
-### 2. Install WirePlumber channel map rule
+### 2. Install ALSA `.asoundrc`
 
-Pro-audio mode labels all channels as generic `AUX0`-`AUX7`. The WirePlumber rule remaps them to their real positions so PipeWire understands the layout.
+Defines a `surround41_cm6206` ALSA device that opens the hardware in 8-channel mode and maps 5 channels (FL FR LFE RL RR) to the correct hardware channels. This is needed for ALSA-native playback and for the `speaker-test` verification.
+
+```bash
+cp configs/asoundrc ~/.asoundrc
+```
+
+Config file: [configs/asoundrc](configs/asoundrc)
+
+### 3. Install WirePlumber channel map rule
+
+Pro-audio mode labels all channels as generic `AUX0`-`AUX7`. The WirePlumber rule remaps them to their real positions so PipeWire understands the layout. Also sets channelmix properties for upmix on the sink itself.
 
 ```bash
 mkdir -p ~/.config/wireplumber/wireplumber.conf.d
@@ -45,7 +55,19 @@ systemctl --user restart wireplumber
 
 Config file: [configs/50-cm6206-channel-map.conf](configs/50-cm6206-channel-map.conf)
 
-### 3. Set as default sink
+### 4. Install PipeWire-Pulse upmix config
+
+Configures PipeWire's built-in channelmix to upmix stereo sources to multi-channel. Uses the PSD (Passive Surround Decoding) algorithm which extracts ambient/difference signal for rear channels. Applied system-wide via pipewire-pulse stream properties.
+
+```bash
+mkdir -p ~/.config/pipewire/pipewire-pulse.conf.d
+cp configs/upmix.conf ~/.config/pipewire/pipewire-pulse.conf.d/
+systemctl --user restart pipewire pipewire-pulse
+```
+
+Config file: [configs/upmix.conf](configs/upmix.conf)
+
+### 5. Set as default sink
 
 ```bash
 # Find the sink ID
@@ -56,24 +78,31 @@ wpctl set-default <sink-id>
 pactl set-default-sink alsa_output.usb-0d8c_USB_Sound_Device-00.pro-output-0
 ```
 
-### 4. Set ALSA mixer volumes
+### 6. Set ALSA mixer volumes
 
 ```bash
-# All channels to 100% (hardware max)
-amixer -c 1 sset 'Speaker' 100%
+# All channels (80% is a safe starting point)
+amixer -c 1 sset 'Speaker' 80%
 
-# PipeWire sink volume (perceived, 80% recommended)
-wpctl set-volume <sink-id> 80%
+# PipeWire sink volume
+wpctl set-volume <sink-id> 75%
 ```
 
-### 5. Verify channel mapping
+### 7. Verify
 
 ```bash
-# Direct ALSA test (8 channels, all jacks)
+# Direct ALSA 8-channel test (all jacks, known working)
 speaker-test -c 8 -D hw:1 -t wav -l 1
 
-# PipeWire stereo test (front speakers only until upmix configured)
-paplay --device=alsa_output.usb-0d8c_USB_Sound_Device-00.pro-output-0 /usr/share/sounds/freedesktop/stereo/bell.oga
+# ALSA surround41 test (5 channels mapped to 8ch hardware, known working)
+speaker-test -c 5 -D surround41_cm6206 -t wav -l 1
+
+# PipeWire stereo test (front speakers)
+paplay /usr/share/sounds/freedesktop/stereo/bell.oga
+
+# PipeWire upmix test - rears (needs stereo with L/R difference)
+ffmpeg -y -f lavfi -i "aevalsrc=0.7*sin(440*2*PI*t)|0.7*sin(880*2*PI*t):duration=3" -ar 48000 /tmp/test_rear_stereo.wav
+paplay /tmp/test_rear_stereo.wav
 ```
 
 ## Current Status
@@ -82,9 +111,11 @@ paplay --device=alsa_output.usb-0d8c_USB_Sound_Device-00.pro-output-0 /usr/share
 - [x] Pro-audio profile activated
 - [x] WirePlumber channel map rule installed
 - [x] Default sink configured
-- [x] Channel mapping verified (8-channel speaker-test)
-- [x] Stereo playback confirmed on front speakers
-- [ ] Upmixing stereo to 4.1 (next step)
+- [x] ALSA 8-channel output verified (all speakers + sub)
+- [x] ALSA surround41 device verified (all speakers + sub)
+- [x] PipeWire stereo playback on front speakers
+- [x] PipeWire upmix to rear speakers (PSD method, confirmed working)
+- [ ] PipeWire upmix to LFE/sub (not working via PipeWire channelmix, works via ALSA direct)
 - [ ] Per-channel volume tuning
 - [ ] EasyEffects software crossover (optional, future)
 - [ ] Snapcast integration (future)
@@ -94,9 +125,14 @@ paplay --device=alsa_output.usb-0d8c_USB_Sound_Device-00.pro-output-0 /usr/share
 - **CM6206 requires 8-channel mode**: 2/4/6 channel ALSA altsets do not route audio to all physical jacks. Only altset 1 (8ch) works.
 - **Pro-audio profile tradeoff**: Loses ACP profile switching and per-port volume control. Gains raw multi-channel access.
 - **No center speaker**: Channel 2 (Front Center) is unused. Stereo upmix must skip center and route to quad + sub only.
+- **LFE upmix not working via PipeWire channelmix**: The `channelmix.lfe-cutoff` property is set on both the WirePlumber rule and pipewire-pulse stream properties, but stereo sources do not produce output on the LFE channel. The sub works correctly when driven directly via ALSA (e.g. `speaker-test -c 5 -D surround41_cm6206`). This needs further investigation.
+- **PSD upmix requires L/R difference**: Identical content on both channels produces no rear output. This is correct behavior (PSD extracts ambient/difference signal) but can be confusing during testing. Use `simple` method instead if you want front copied to rear regardless.
+- **Filter-chain module did not work**: PipeWire's `libpipewire-module-filter-chain` with builtin DSP nodes (convolver, delay, bq_lowpass) produced no output despite correct port links. Root cause unknown. The loopback module approach also failed for LFE. The working solution is system-wide channelmix via pipewire-pulse stream properties.
 
 ## Files
 
 | File | Purpose | Install Location |
 |---|---|---|
-| `configs/50-cm6206-channel-map.conf` | WirePlumber ALSA monitor rule for channel positions | `~/.config/wireplumber/wireplumber.conf.d/` |
+| `configs/asoundrc` | ALSA surround41 device for CM6206 (8ch hw, 5ch mapped) | `~/.asoundrc` |
+| `configs/50-cm6206-channel-map.conf` | WirePlumber ALSA monitor rule (channel positions + channelmix) | `~/.config/wireplumber/wireplumber.conf.d/` |
+| `configs/upmix.conf` | PipeWire-Pulse stream properties for system-wide upmix | `~/.config/pipewire/pipewire-pulse.conf.d/` |

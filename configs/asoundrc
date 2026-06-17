@@ -1,0 +1,27 @@
+pcm.surround41_cm6206 {
+    type plug
+    slave.pcm {
+        type hw
+        card ICUSBAUDIO7D
+        channels 8
+    }
+    ttable.0.0 1
+    ttable.1.1 1
+    ttable.2.3 1
+    ttable.3.4 1
+    ttable.4.5 1
+}
+
+pcm.surround41_1 {
+    type plug
+    slave.pcm {
+        type hw
+        card ICUSBAUDIO7D
+        channels 8
+    }
+    ttable.0.0 1
+    ttable.1.1 1
+    ttable.2.3 1
+    ttable.3.4 1
+    ttable.4.5 1
+}
