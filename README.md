@@ -4,7 +4,8 @@
 
 - **Sound card**: CM6206 (USB ID `0d8c:0102`, sold as ICUSBAUDIO7D)
 - **Front speakers**: Edifier powered pair on green jack (Front L/R)
-- **Rear speakers**: Edifier powered pair on black jack (Rear L/R)
+- **Rear speakers**: Edifier powered pair on black **Surround** jack (Rear L/R in ALSA `surround51`)
+- **Unused grey jack**: Back Out — only active in 7.1 / 8-channel mode
 - **Subwoofer**: B&W ASW608 on orange C/SUB jack (LFE)
 - **Centre speaker**: *Not present*
 - **OS**: Kubuntu 26.04 LTS, PipeWire 1.6.2, WirePlumber 0.5.13
@@ -17,6 +18,7 @@ A unified loopback sink (`unified-upmix`) is configured as the default audio des
 - Any stereo source connected to `unified-upmix` is upmixed to 6-channel using PipeWire's PSD algorithm (`channelmix.upmix-method = psd`).
 - The loopback's playback side is mapped to `[FL FR RL RR LFE]`, deliberately omitting the **FC** channel.
 - Since FC is missing from the playback stream, the orange C/SUB jack carries only the LFE subwoofer signal.
+- ALSA `surround51` routes the `RL`/`RR` channels to the CM6206's **Surround** jack (black). The grey **Back Out** jack is silent in 5.1 mode.
 - The centre speaker effectively works as a **phantom centre** (equal energy on FL and FR creates a central phantom image). This is fully intentional.
 
 ## Channel Mapping
@@ -29,8 +31,9 @@ The CM6206 exposes a 6-channel ALSA device in `analog-surround-51` mode. PipeWir
 | FR (1) | Green | Front right Edifier | |
 | FC (2) | Orange | *Centre speaker* | **Silenced** by playback.position array |
 | LFE (3) | Orange | B&W ASW608 subwoofer | Crossover 80Hz on sub |
-| RL (4) | Black | Rear left Edifier | |
-| RR (5) | Black | Rear right Edifier | |
+| RL (4) | Black **Surround** | Rear left Edifier | ALSA `surround51` maps RL/RR to the side/surround pins |
+| RR (5) | Black **Surround** | Rear right Edifier | |
+| — | Grey **Back Out** | *Nothing* | Only active in 7.1 / 8-channel mode |
 
 ## Unified Upmix Sink
 
@@ -116,7 +119,11 @@ pactl list short sinks
 paplay /usr/share/sounds/freedesktop/stereo/bell.oga
 
 # ALSA 5.1 speaker test (FC point will be silent)
+# RL/RR tones come out the BLACK Surround jack, not the grey Back Out jack.
 speaker-test -c 6 -D pipewire -t wav -l 1
+
+# Direct ALSA test bypassing PipeWire (useful to confirm jack mapping)
+speaker-test -c 6 -D surround51:CARD=ICUSBAUDIO7D,DEV=0 -t wav -l 1
 
 # Check that unified-upmix is default
 pactl info | grep "Default Sink"
@@ -136,7 +143,7 @@ All paths in the repo use absolute links (`ln -snf`) so you can change files in 
 
 ## Current Status
 
-- [x] Hardware connected (green/black/orange jacks)
+- [x] Hardware connected (green Front, black Surround, orange C/SUB; grey Back Out unused in 5.1)
 - [x] `analog-surround-51` profile active (6ch)
 - [x] Unified loopback sink installed and default
 - [x] Centre channel intentionally silenced (phantom centre)
@@ -161,6 +168,7 @@ The following files were deleted from the repo and active config directories as 
 
 ## Known Quirks
 
+- **ICUSBAUDIO7D jack naming vs ALSA**: The black jack is labelled **Surround** and carries the side/surround channels in 5.1 mode. The grey jack is labelled **Back Out** and is only active in 7.1 / 8-channel mode. ALSA's `surround51` device sends its `RL`/`RR` channels to the black Surround jack, so plug rear speakers there. See the [StarTech manual](https://sgcdn.startech.com/005329/media/sets/icusbaudio7d_manual/icusbaudio7d__usermanual.pdf) and the [CM6206LX datasheet](http://product.ic114.com/PDF/C/CM6206-LX.PDF) (pins `SSOL`/`SSOR` are side-surround for Vista 5.1).
 - **Phantom centre**: The centre speaker position is silent. Stereo vocals are phantom-imaged between FL and FR. This is standard surround practice and sounds correct for watching movies or listening to music.
 - **LFE upmix**: `channelmix.lfe-cutoff = 150` and `mix-lfe = true` are required for stereo LF content to reach the sub. The B&W sub's hardware crossover at 80Hz filters the extra high-frequency content anyway.
 - **Orange jack**: On the CM6206, the orange jack carries both FC and LFE. By dropping FC from playback.position, only LFE remains. This is why the sub works and the nonexistent centre stays silent.
