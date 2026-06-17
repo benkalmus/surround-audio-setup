@@ -46,6 +46,43 @@ Key settings:
 - `playback.props`: 5 channels `[FL FR RL RR LFE]`. FC is dropped, so the orange jack's centre channel sees zero signal.
 - `target.object` points directly to the hardware node `alsa_output.usb-0d8c_USB_Sound_Device-00.analog-surround-51`.
 
+## Vinyl Passthrough
+
+UDreamer turntable (3.5mm headphone out) → CM6206 Line-In → unified-upmix → 5.1 speakers.
+
+Script: [bin/vinyl-toggle](bin/vinyl-toggle)
+
+Toggle on/off manually to avoid ADC hiss when turntable is idle. When ON:
+1. Switches CM6206 input port from mic to line-in
+2. Loads `module-loopback` (source → unified-upmix) which creates a proper PulseAudio stream
+3. Stereo signal gets PSD-upmixed to 4.1 (fronts + rears + sub)
+
+When OFF: unloads the loopback module and switches port back to mic (silent).
+
+### Sound quality tips
+
+- CM6206 input at 100% will clip. Start at 50-70%: `pactl set-source-volume alsa_input.usb-0d8c_USB_Sound_Device-00.analog-stereo 60%`
+- Set turntable headphone volume to ~70% for best signal-to-noise ratio
+- CM6206 has a budget ADC. Some noise floor is expected.
+
+### Usage
+
+```bash
+vinyl-toggle          # toggle
+vinyl-toggle on       # force on
+vinyl-toggle off      # force off
+vinyl-toggle status   # print ON or OFF
+```
+
+### Install
+
+```bash
+mkdir -p ~/bin
+ln -snf ~/repos/audio-setup-cm6206/bin/vinyl-toggle ~/bin/vinyl-toggle
+```
+
+Ensure `~/bin` is in `$PATH` (it is by default on Kubuntu).
+
 ## Install Steps
 
 ### 1. Set PipeWire profile to analog-surround-51
@@ -138,6 +175,7 @@ pactl info | grep "Default Sink"
 | `configs/pipewire-pulse-upmix.conf` | Global stream fallback upmix (Pulse apps) | `~/.config/pipewire/pipewire-pulse.conf.d/upmix.conf` |
 | `configs/60-bluetooth-route.conf` | Route Bluetooth audio → unified-upmix | `~/.config/wireplumber/wireplumber.conf.d/` |
 | `configs/asoundrc` | Custom ALSA device for direct speaker test | `~/.asoundrc` |
+| `bin/vinyl-toggle` | Toggle vinyl passthrough (line-in → upmix) | `~/bin/vinyl-toggle` |
 
 All paths in the repo use absolute links (`ln -snf`) so you can change files in `~/repos/audio-setup-cm6206/configs/` without touching `~/.config/`.
 
@@ -155,6 +193,7 @@ All paths in the repo use absolute links (`ln -snf`) so you can change files in 
 - [ ] Network audio receiver (to replace VBAN)
 - [ ] EasyEffects software crossover (optional, future)
 - [ ] Per-channel volume tuning
+- [x] Vinyl passthrough (turntable line-in → 5.1 upmix, toggleable)
 
 ## Removed Configs (Old Experiment)
 
