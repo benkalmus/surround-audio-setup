@@ -118,7 +118,7 @@ paplay /tmp/test_rear_stereo.wav
 - [x] PipeWire upmix to LFE/sub (lfe-cutoff=150, mix-lfe=true)
 - [ ] Per-channel volume tuning
 - [ ] EasyEffects software crossover (optional, future)
-- [ ] Snapcast integration (future)
+- [ ] Network audio receiver setup (see [NETWORK-AUDIO-PLAN.md](NETWORK-AUDIO-PLAN.md))
 
 ## Known Quirks
 
