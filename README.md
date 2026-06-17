@@ -67,7 +67,47 @@ systemctl --user restart pipewire pipewire-pulse
 
 Config file: [configs/upmix.conf](configs/upmix.conf)
 
-### 5. Set as default sink
+### 5. Install VBAN receiver + upmix sink (network audio from Windows)
+
+Receives 2-channel VBAN audio from a Windows PC (running Voicemeeter), then upmixes it to 4.1 using PipeWire's PSD algorithm. This makes opti function as a network audio receiver similar to a Sonos speaker.
+
+**Audio chain**: Windows (Voicemeeter) --VBAN 2ch--> opti (vban-recv) --> vban-upmix (loopback sink) --> PSD upmix --> CM6206 (FL FR RL RR FC LFE)
+
+```bash
+# VBAN receiver module
+mkdir -p ~/.config/pipewire/pipewire.conf.d
+cp configs/vban-recv.conf ~/.config/pipewire/pipewire.conf.d/
+
+# Loopback upmix sink (2ch in, 6ch out with PSD upmix)
+cp configs/vban-upmix-sink.conf ~/.config/pipewire/pipewire.conf.d/
+
+# WirePlumber routing rule (routes VBAN stream to upmix sink)
+cp configs/51-vban-routing.conf ~/.config/wireplumber/wireplumber.conf.d/
+
+# Restart everything
+systemctl --user restart pipewire pipewire-pulse wireplumber
+```
+
+Config files:
+- [configs/vban-recv.conf](configs/vban-recv.conf) - VBAN receiver (listens on 0.0.0.0:6980)
+- [configs/vban-upmix-sink.conf](configs/vban-upmix-sink.conf) - Loopback upmix sink with PSD
+- [configs/51-vban-routing.conf](configs/51-vban-routing.conf) - WirePlumber routing rule
+
+**Windows setup (Voicemeeter Banana)**:
+1. Install [Voicemeeter Banana](https://vb-audio.com/Voicemeeter/banana.htm)
+2. Set A1 output to your local speakers (WDM Realtek or similar)
+3. In VBAN Out tab, add a new stream:
+   - Destination: opti.local (or 192.168.100.15)
+   - Port: 6980
+   - Channels: 2
+   - Sample rate: 48000
+   - Format: 16-bit
+4. Enable the VBAN Out stream
+5. Audio from Voicemeeter Input (default Windows playback device) will be sent to opti
+
+**Important**: Only 2-channel VBAN works. Multi-channel VBAN (>2ch) causes severe distortion due to VB-Cable virtual I/O limitations on Windows (2ch max since Vista). The upmix is handled by PipeWire on opti instead.
+
+### 6. Set as default sink
 
 ```bash
 # Find the sink ID
@@ -78,7 +118,7 @@ wpctl set-default <sink-id>
 pactl set-default-sink alsa_output.usb-0d8c_USB_Sound_Device-00.pro-output-0
 ```
 
-### 6. Set ALSA mixer volumes
+### 7. Set ALSA mixer volumes
 
 ```bash
 # All channels (80% is a safe starting point)
@@ -88,7 +128,7 @@ amixer -c 1 sset 'Speaker' 80%
 wpctl set-volume <sink-id> 75%
 ```
 
-### 7. Verify
+### 8. Verify
 
 ```bash
 # Direct ALSA 8-channel test (all jacks, known working)
@@ -103,6 +143,10 @@ paplay /usr/share/sounds/freedesktop/stereo/bell.oga
 # PipeWire upmix test - rears (needs stereo with L/R difference)
 ffmpeg -y -f lavfi -i "aevalsrc=0.7*sin(440*2*PI*t)|0.7*sin(880*2*PI*t):duration=3" -ar 48000 /tmp/test_rear_stereo.wav
 paplay /tmp/test_rear_stereo.wav
+
+# VBAN routing check
+pw-link -l | grep -A2 vban-recv
+pw-link -l | grep -A2 vban-upmix-output
 ```
 
 ## Current Status
@@ -116,9 +160,27 @@ paplay /tmp/test_rear_stereo.wav
 - [x] PipeWire stereo playback on front speakers
 - [x] PipeWire upmix to rear speakers (PSD method, confirmed working)
 - [x] PipeWire upmix to LFE/sub (lfe-cutoff=150, mix-lfe=true)
+- [x] VBAN network audio receiver (2ch from Windows)
+- [x] VBAN upmix to 4.1 via loopback sink (persistent WirePlumber routing)
 - [ ] Per-channel volume tuning
 - [ ] EasyEffects software crossover (optional, future)
-- [ ] Network audio receiver setup (see [NETWORK-AUDIO-PLAN.md](NETWORK-AUDIO-PLAN.md))
+- [ ] AirPlay receiver (shairport-sync, dormant - mDNS not advertising)
+
+## Shairport-sync (AirPlay Receiver - Dormant)
+
+Built from source as classic AirPlay 1 (no `--with-airplay-2`). Runs as a user service on port 5000. Currently dormant because mDNS advertisement is not working (Avahi does not register the service). The VBAN setup is the primary network audio path.
+
+Config files:
+- [configs/shairport-sync.conf](configs/shairport-sync.conf) - Shairport-sync config
+- [configs/shairport-sync.service](configs/shairport-sync.service) - Systemd user service
+
+Install:
+```bash
+cp configs/shairport-sync.conf /etc/shairport-sync.conf
+cp configs/shairport-sync.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now shairport-sync
+```
 
 ## Known Quirks
 
@@ -127,7 +189,9 @@ paplay /tmp/test_rear_stereo.wav
 - **No center speaker**: Channel 2 (Front Center) is unused. Stereo upmix must skip center and route to quad + sub only.
 - **LFE upmix requires lfe-cutoff >= 150 and mix-lfe=true**: With `lfe-cutoff = 80`, PipeWire's channelmix did not produce LFE output from stereo sources. Setting `lfe-cutoff = 150` and `mix-lfe = true` fixed it. The hardware sub crossover is set to 80Hz, so the higher software cutoff still gets filtered correctly by the B&W's hardware crossover.
 - **PSD upmix requires L/R difference**: Identical content on both channels produces no rear output. This is correct behavior (PSD extracts ambient/difference signal) but can be confusing during testing. Use `simple` method instead if you want front copied to rear regardless.
-- **Filter-chain module did not work**: PipeWire's `libpipewire-module-filter-chain` with builtin DSP nodes (convolver, delay, bq_lowpass) produced no output despite correct port links. Root cause unknown. The loopback module approach also failed for LFE. The working solution is system-wide channelmix via pipewire-pulse stream properties.
+- **VBAN multi-channel distortion**: VB-Cable virtual I/O on Windows is limited to 2 channels since Windows Vista. Setting VBAN to >2 channels in Voicemeeter causes severe distortion. Use 2ch VBAN and let PipeWire upmix on the receiver side.
+- **VBAN upmix routing**: WirePlumber needs `target.object = "vban-upmix"` set in both the VBAN module's `stream.props` (top-level) and the `create-stream` action. The `node.dont-fallback = true` prevents WirePlumber from falling back to the default sink when the upmix sink isn't ready yet.
+- **Shairport-sync mDNS not advertising**: Classic AP1 build does not register its mDNS service with Avahi. Root cause unknown. PigeonCast (Android) could detect the device when running in AirPlay 2 mode, but AP2 mode rejects NTP-timed streams with "can not handle NTP streams" error. Classic AP1 mode supports NTP but doesn't advertise.
 
 ## Install Locations
 
@@ -138,6 +202,11 @@ Configs can be installed per-user or system-wide. System-wide makes the 4.1 setu
 | `configs/asoundrc` | `~/.asoundrc` | `/etc/asound.conf` |
 | `configs/50-cm6206-channel-map.conf` | `~/.config/wireplumber/wireplumber.conf.d/` | `/etc/wireplumber/wireplumber.conf.d/` |
 | `configs/upmix.conf` | `~/.config/pipewire/pipewire-pulse.conf.d/` | `/etc/pipewire/pipewire-pulse.conf.d/` |
+| `configs/vban-recv.conf` | `~/.config/pipewire/pipewire.conf.d/` | `/etc/pipewire/pipewire.conf.d/` |
+| `configs/vban-upmix-sink.conf` | `~/.config/pipewire/pipewire.conf.d/` | `/etc/pipewire/pipewire.conf.d/` |
+| `configs/51-vban-routing.conf` | `~/.config/wireplumber/wireplumber.conf.d/` | `/etc/wireplumber/wireplumber.conf.d/` |
+| `configs/shairport-sync.conf` | - | `/etc/shairport-sync.conf` (requires sudo) |
+| `configs/shairport-sync.service` | `~/.config/systemd/user/` | - |
 
 ### System-wide install (requires sudo)
 
@@ -147,6 +216,10 @@ sudo mkdir -p /etc/wireplumber/wireplumber.conf.d
 sudo cp configs/50-cm6206-channel-map.conf /etc/wireplumber/wireplumber.conf.d/
 sudo mkdir -p /etc/pipewire/pipewire-pulse.conf.d
 sudo cp configs/upmix.conf /etc/pipewire/pipewire-pulse.conf.d/
+sudo mkdir -p /etc/pipewire/pipewire.conf.d
+sudo cp configs/vban-recv.conf /etc/pipewire/pipewire.conf.d/
+sudo cp configs/vban-upmix-sink.conf /etc/pipewire/pipewire.conf.d/
+sudo cp configs/shairport-sync.conf /etc/shairport-sync.conf
 ```
 
 After system-wide install, the per-user copies in `~/.config/` and `~/.asoundrc` can be removed since the system-level configs take precedence when no user override exists.

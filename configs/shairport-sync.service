@@ -1,0 +1,14 @@
+[Unit]
+Description=Shairport Sync - AirPlay Audio Receiver
+After=pipewire.service
+Requires=pipewire.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+Environment=DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+ExecStart=/usr/local/bin/shairport-sync --log-to-syslog
+
+[Install]
+WantedBy=default.target
