@@ -115,7 +115,7 @@ paplay /tmp/test_rear_stereo.wav
 - [x] ALSA surround41 device verified (all speakers + sub)
 - [x] PipeWire stereo playback on front speakers
 - [x] PipeWire upmix to rear speakers (PSD method, confirmed working)
-- [ ] PipeWire upmix to LFE/sub (not working via PipeWire channelmix, works via ALSA direct)
+- [x] PipeWire upmix to LFE/sub (lfe-cutoff=150, mix-lfe=true)
 - [ ] Per-channel volume tuning
 - [ ] EasyEffects software crossover (optional, future)
 - [ ] Snapcast integration (future)
@@ -125,7 +125,7 @@ paplay /tmp/test_rear_stereo.wav
 - **CM6206 requires 8-channel mode**: 2/4/6 channel ALSA altsets do not route audio to all physical jacks. Only altset 1 (8ch) works.
 - **Pro-audio profile tradeoff**: Loses ACP profile switching and per-port volume control. Gains raw multi-channel access.
 - **No center speaker**: Channel 2 (Front Center) is unused. Stereo upmix must skip center and route to quad + sub only.
-- **LFE upmix not working via PipeWire channelmix**: The `channelmix.lfe-cutoff` property is set on both the WirePlumber rule and pipewire-pulse stream properties, but stereo sources do not produce output on the LFE channel. The sub works correctly when driven directly via ALSA (e.g. `speaker-test -c 5 -D surround41_cm6206`). This needs further investigation.
+- **LFE upmix requires lfe-cutoff >= 150 and mix-lfe=true**: With `lfe-cutoff = 80`, PipeWire's channelmix did not produce LFE output from stereo sources. Setting `lfe-cutoff = 150` and `mix-lfe = true` fixed it. The hardware sub crossover is set to 80Hz, so the higher software cutoff still gets filtered correctly by the B&W's hardware crossover.
 - **PSD upmix requires L/R difference**: Identical content on both channels produces no rear output. This is correct behavior (PSD extracts ambient/difference signal) but can be confusing during testing. Use `simple` method instead if you want front copied to rear regardless.
 - **Filter-chain module did not work**: PipeWire's `libpipewire-module-filter-chain` with builtin DSP nodes (convolver, delay, bq_lowpass) produced no output despite correct port links. Root cause unknown. The loopback module approach also failed for LFE. The working solution is system-wide channelmix via pipewire-pulse stream properties.
 
