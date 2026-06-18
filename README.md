@@ -46,6 +46,20 @@ Key settings:
 - `playback.props`: 5 channels `[FL FR RL RR LFE]`. FC is dropped, so the orange jack's centre channel sees zero signal.
 - `target.object` points directly to the hardware node `alsa_output.usb-0d8c_USB_Sound_Device-00.analog-surround-51`.
 
+### Upmix Config Scopes
+
+Three config files set `channelmix.*` properties, but they apply at different scopes and only activate when PipeWire needs to convert between different channel counts:
+
+| File | Location | Scope | When it applies |
+|------|----------|-------|-----------------|
+| `unified-upmix-sink.conf` | `pipewire.conf.d/` | Creates the loopback **sink node** with upmix props on its capture side | Any stream connected to `unified-upmix` sink |
+| `pipewire-pulse-upmix.conf` | `pipewire-pulse.conf.d/` | Default `stream.properties` for **all PulseAudio clients** | Local apps using PulseAudio API (Firefox, Spotify, etc.) |
+| `client-upmix.conf` | `client.conf.d/` | Default `stream.properties` for **all PipeWire clients** | Local apps using native PipeWire API |
+
+**Critical limitation**: The `channelmix.*` properties only activate when PipeWire needs to **convert between different channel counts** (e.g., stereo source → 6ch sink). They're part of the channel mixer, not a standalone DSP effect. If a stream arrives as 6ch matching a 6ch sink, no channel conversion occurs and these properties are bypassed entirely.
+
+**Example**: VBAN from Windows sends 6ch audio → unified-upmix receives 6ch matching its 6ch capture format → no upmix processing → `lfe-cutoff` never applies. The LFE channel passes through with whatever the source already put in it.
+
 ## Vinyl Passthrough
 
 UDreamer turntable (3.5mm headphone out) → CM6206 Line-In → unified-upmix → 5.1 speakers.
