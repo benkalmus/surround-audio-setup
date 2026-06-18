@@ -128,7 +128,7 @@ ln -snf ~/repos/audio-setup-cm6206/configs/pipewire-pulse-upmix.conf \
     ~/.config/pipewire/pipewire-pulse.conf.d/upmix.conf
 ```
 
-### 4. Install Bluetooth routing rule
+### 4. Install Bluetooth routing rule & Setup
 
 This routes audio from any paired Bluetooth device directly into `unified-upmix`, so phone music also gets upmixed to surround.
 
@@ -137,6 +137,28 @@ mkdir -p ~/.config/wireplumber/wireplumber.conf.d
 ln -snf ~/repos/audio-setup-cm6206/configs/60-bluetooth-route.conf \
     ~/.config/wireplumber/wireplumber.conf.d/60-bluetooth-route.conf
 ```
+
+You also may wish to permanently enable Bluetooth (on login) and automatically accept pairing:
+
+
+```bash
+sudo cp bluetooth/main.conf /etc/bluetooth/main.conf
+
+bluetoothctl discoverable on
+bluetoothctl agent on
+bluetoothctl default-agent
+```
+
+I also recommend manual toggle bluetooth commands in KDE Connect app:
+1. Open KDE Connect settings on PC
+2. Enable "Run commands" plugin
+3. Add two commands:
+
+|Name |Command|
+|----|----|
+|Bluetooth ON |rfkill unblock bluetooth|
+|Bluetooth OFF | rfkill block bluetooth|
+
 
 ### 5. Restart services
 
