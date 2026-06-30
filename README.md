@@ -160,19 +160,31 @@ I also recommend manual toggle bluetooth commands in KDE Connect app:
 |Bluetooth OFF | rfkill block bluetooth|
 
 
-### 5. Restart services
+### 5. Install systemd override (prevent startup race)
+
+USB audio devices may not be ready when PipeWire starts at boot, causing sink creation to fail with "Device or resource busy". Add a dependency on `sound.target`:
+
+```bash
+mkdir -p ~/.config/systemd/user/pipewire.service.d
+ln -snf ~/repos/audio-setup-cm6206/configs/10-wait-for-sound.conf \
+    ~/.config/systemd/user/pipewire.service.d/10-wait-for-sound.conf
+
+systemctl --user daemon-reload
+```
+
+### 6. Restart services
 
 ```bash
 systemctl --user restart pipewire pipewire-pulse wireplumber
 ```
 
-### 6. Set unified-upmix as default sink
+### 7. Set unified-upmix as default sink
 
 ```bash
 pactl set-default-sink unified-upmix
 ```
 
-### 7. Set volumes
+### 8. Set volumes
 
 ```bash
 # CM6206 hardware volume (all channels)
@@ -182,7 +194,7 @@ amixer -c 1 sset 'Speaker' 80%
 wpctl set-volume unified-upmix 0.75
 ```
 
-### 8. Verify
+### 9. Verify
 
 ```bash
 # List sinks: should see unified-upmix and the 6ch CM6206 hardware
@@ -210,6 +222,7 @@ pactl info | grep "Default Sink"
 | `configs/client-upmix.conf` | Global stream fallback upmix (client apps) | `~/.config/pipewire/client.conf.d/upmix.conf` |
 | `configs/pipewire-pulse-upmix.conf` | Global stream fallback upmix (Pulse apps) | `~/.config/pipewire/pipewire-pulse.conf.d/upmix.conf` |
 | `configs/60-bluetooth-route.conf` | Route Bluetooth audio → unified-upmix | `~/.config/wireplumber/wireplumber.conf.d/` |
+| `configs/10-wait-for-sound.conf` | PipeWire waits for sound.target before starting | `~/.config/systemd/user/pipewire.service.d/` |
 | `configs/asoundrc` | Custom ALSA device for direct speaker test | `~/.asoundrc` |
 | `bin/vinyl-toggle` | Toggle vinyl passthrough (line-in → upmix) | `~/bin/vinyl-toggle` |
 
@@ -248,4 +261,5 @@ The following files were deleted from the repo and active config directories as 
 - **LFE upmix**: `channelmix.lfe-cutoff = 150` and `mix-lfe = true` are required for stereo LF content to reach the sub. The B&W sub's hardware crossover at 80Hz filters the extra high-frequency content anyway.
 - **Orange jack**: On the CM6206, the orange jack carries both FC and LFE. By dropping FC from playback.position, only LFE remains. This is why the sub works and the nonexistent centre stays silent.
 - **PSD rear channel requirement**: PipeWire's Passive Surround Decoding only sends audio to rear channels when LEFT and RIGHT differ significantly. Identical mono content produces no rear output. This is correct behaviour.
+- **USB audio startup race**: Without the systemd override, PipeWire may start before the USB device is ready, causing "Device or resource busy" errors and missing sinks. The `10-wait-for-sound.conf` override fixes this by adding `After=sound.target` to pipewire.service.
 - **Pro-audio profile abandoned**: The 8ch `pro-audio` profile worked but forced manual ALSA mappings and lost volume control. `analog-surround-51` is simpler, gives proper channel labels, and PipeWire volume control works out of the box.
